@@ -1,10 +1,10 @@
 # Эминов Тагир, Ковалев Илья - “Qwiz”
 
-### ФИО:		Эминов Тагир Ренатович
+### ФИО:    Эминов Тагир Ренатович
 ### Группа:	10М
 
 ## Социальные сети
-### Email:		treminov@edu.hse.ru
+### Email:	treminov@edu.hse.ru
 ### TG:		t.me/spike_with_a_cigarette
 ### VK:		vk.com/crying_alone_right_now
 
