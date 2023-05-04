@@ -4,8 +4,8 @@
 ### Группа:	10М
 
 ## Социальные сети
+### TG:		t.me/balbesik
 ### Email:	treminov@edu.hse.ru
-### TG:		t.me/spike_with_a_cigarette
 ### VK:		vk.com/crying_alone_right_now
 
 **[ Название проекта ]**
