@@ -48,7 +48,7 @@ func main() {
 	// Загрузка переменных окружения
 	// (аналог dotenv() в Rust)
 	// (предполагается, что вы используете пакет github.com/joho/godotenv)
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load("config.env"); err != nil {
 		fmt.Println("No .env file found")
 	}
 
@@ -76,7 +76,16 @@ func main() {
 	vote.DB = database
 	qwiz.DB = database
 
-	r := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+
+	// Создаем экземпляр gin без предустановленных миддлваров
+	r := gin.New()
+
+	// Добавляем миддлвары логирования и восстановления вручную
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+
+	// Продолжаем с настройкой остальных миддлваров и маршрутов
 	r.Use(utils.LimitRequestBody(byteLimit))
 	r.Use(utils.ErrorHandlingMiddleware())
 

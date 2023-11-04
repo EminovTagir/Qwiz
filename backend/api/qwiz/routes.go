@@ -76,6 +76,7 @@ type GetFullQwizData struct {
 func NewGetFullQwizData(qwiz Qwiz) (*GetFullQwizData, error) {
 	questions, err := question.GetAllQuestionsByQwizID(qwiz.ID)
 	if err != nil {
+		log.Printf("Error fetching questions for quiz ID %d: %v", qwiz.ID, err)
 		return nil, err
 	}
 
@@ -83,6 +84,7 @@ func NewGetFullQwizData(qwiz Qwiz) (*GetFullQwizData, error) {
 	for _, quest := range questions {
 		getQuestionData, err := question.GetQuestionDataFromQuestion(quest)
 		if err != nil {
+			log.Printf("Error fetching question data for question: %v", err)
 			return nil, err // Handle error appropriately
 		}
 		getQuestionsData = append(getQuestionsData, *getQuestionData)
@@ -97,6 +99,8 @@ func NewGetFullQwizData(qwiz Qwiz) (*GetFullQwizData, error) {
 				URI:       mediaData.URI,
 				MediaType: media.Type(mediaData.MediaType),
 			}
+		} else {
+			log.Printf("Error fetching media data for Thumbnail UUID %s: %v", qwiz.ThumbnailUUID, err)
 		}
 	}
 
@@ -144,13 +148,13 @@ func getQwizByID(c *gin.Context) {
 
 // GetShortQwizData mirrors the Rust structure for serialization.
 type GetShortQwizData struct {
-	ID                       int32   `json:"id"`
-	Name                     string  `json:"name"`
-	ThumbnailURI             *string `json:"thumbnail_uri,omitempty"`
-	Votes                    *int64  `json:"votes,omitempty"`
-	CreatorName              *string `json:"creator_name,omitempty"`
-	CreatorProfilePictureURI *string `json:"creator_profile_picture_uri,omitempty"`
-	CreateTime               *int64  `json:"create_time,omitempty"`
+	ID                       int32   `db:"id" json:"id"`
+	Name                     string  `db:"name" json:"name"`
+	ThumbnailURI             *string `db:"thumbnail_uri" json:"thumbnail_uri,omitempty"`
+	Votes                    *int64  `db:"votes" json:"votes,omitempty"`
+	CreatorName              *string `db:"creator_name" json:"creator_name,omitempty"`
+	CreatorProfilePictureURI *string `db:"creator_profile_picture_uri" json:"creator_profile_picture_uri,omitempty"`
+	CreateTime               *int64  `db:"create_time" json:"create_time,omitempty"`
 }
 
 // getBest handles the request for the best qwizes. It supports optional search and page parameters.
@@ -183,6 +187,16 @@ func getBestQwizes(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Если список викторин пустой, необязательно ошибка, может не быть данных
+	if len(qwizes) == 0 {
+		fmt.Println("No quizzes found for the given parameters.")
+		c.JSON(http.StatusOK, []GetShortQwizData{}) // Возвращаем пустой массив вместо null
+		return
+	}
+
+	// Отправляем данные обратно клиенту
+	fmt.Printf("Quizzes found: %d\n", len(qwizes))
 
 	// Отправляем данные обратно клиенту
 	c.JSON(http.StatusOK, qwizes)
@@ -379,7 +393,7 @@ func deleteQwizHandler(c *gin.Context) {
 	qwiz, err := GetByID(int32(id))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			c.Status(http.StatusNotFound)
+			c.JSON(http.StatusNotFound, gin.H{"error": "Qwiz ID not found"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		}
@@ -399,7 +413,7 @@ func deleteQwizHandler(c *gin.Context) {
 			utils.InternalErr(err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		} else {
-			c.Status(http.StatusUnauthorized)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		}
 		return
 	}
@@ -429,7 +443,7 @@ type SolveQwizData struct {
 // solveQwiz handler function
 func solveQwiz(c *gin.Context) {
 	var solveQwizData PostSolveQwizData
-	qwizIDStr := c.Param("qwiz_id") // Assumes qwiz_id is passed as a parameter
+	qwizIDStr := c.Param("id") // Assumes qwiz_id is passed as a parameter
 	assignmentID := c.Query("assignment_id")
 
 	if err := c.ShouldBindJSON(&solveQwizData); err != nil {

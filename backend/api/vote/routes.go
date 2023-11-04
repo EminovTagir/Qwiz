@@ -40,7 +40,7 @@ func fromVotes(votes []Vote) GetVoteData {
 
 // getVotesHandler handles the GET request to fetch votes
 func getVotesHandler(c *gin.Context) {
-	qwizID, err := strconv.Atoi(c.Param("qwiz_id"))
+	qwizID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid qwiz ID"})
 		return
@@ -62,7 +62,7 @@ func getVotesHandler(c *gin.Context) {
 
 // PutVoteData structure to bind the PUT request body
 type PutVoteData struct {
-	VoterID       int32  `json:"voter_id"`
+	VoterID       string `json:"voter_id"`
 	VoterPassword string `json:"voter_password"`
 }
 
@@ -74,13 +74,19 @@ func addVoteHandler(c *gin.Context) {
 		return
 	}
 
-	qwizID, err := strconv.ParseInt(c.Param("qwiz_id"), 10, 32)
+	voterIDInt, err := strconv.ParseInt(data.VoterID, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Voter ID"})
+		return
+	}
+
+	qwizID, err := strconv.ParseInt(c.Param("id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Qwiz ID"})
 		return
 	}
 
-	acct, err := account.GetByID(data.VoterID)
+	acct, err := account.GetByID(int32(voterIDInt))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
@@ -94,7 +100,7 @@ func addVoteHandler(c *gin.Context) {
 		return
 	}
 
-	exists, err := Exists(data.VoterID, int32(qwizID))
+	exists, err := Exists(int32(voterIDInt), int32(qwizID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
@@ -106,7 +112,7 @@ func addVoteHandler(c *gin.Context) {
 	}
 
 	// This will handle inserting a new vote, assuming NewVoteData is equivalent to PutVoteData
-	_, err = FromVoteData(NewVoteData{VoterID: data.VoterID, QwizID: int32(qwizID)})
+	_, err = FromVoteData(NewVoteData{VoterID: int32(voterIDInt), QwizID: int32(qwizID)})
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrQwizNotFound):
@@ -124,7 +130,7 @@ func addVoteHandler(c *gin.Context) {
 
 // DeleteVoteData structure to bind the DELETE request body
 type DeleteVoteData struct {
-	VoterID       int32  `json:"voter_id"`
+	VoterID       string `json:"voter_id"`
 	VoterPassword string `json:"voter_password"`
 }
 
@@ -136,13 +142,19 @@ func deleteVoteHandler(c *gin.Context) {
 		return
 	}
 
-	qwizID, err := strconv.ParseInt(c.Param("qwiz_id"), 10, 32)
+	qwizID, err := strconv.ParseInt(c.Param("id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Qwiz ID"})
 		return
 	}
 
-	acct, err := account.GetByID(data.VoterID)
+	voterIDInt, err := strconv.ParseInt(data.VoterID, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Voter ID"})
+		return
+	}
+
+	acct, err := account.GetByID(int32(voterIDInt))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
@@ -156,7 +168,7 @@ func deleteVoteHandler(c *gin.Context) {
 		return
 	}
 
-	vote, err := GetByVoterIDQwizID(data.VoterID, int32(qwizID))
+	vote, err := GetByVoterIDQwizID(int32(voterIDInt), int32(qwizID))
 	if err != nil {
 		if errors.Is(err, ErrQwizNotFound) {
 			c.Status(http.StatusNotFound)

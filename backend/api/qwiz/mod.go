@@ -187,6 +187,10 @@ func Solve(qwizID int32, answers []uint8) ([]bool, error) {
 
 	results := make([]bool, len(answers))
 	for i, answer := range answers {
+		// Проверяем, что ответ входит в допустимый диапазон значений.
+		if answer < 1 || answer > 4 {
+			return nil, fmt.Errorf("answer %d is out of range", answer)
+		}
 		results[i] = answer == uint8(questions[i].Correct)
 	}
 

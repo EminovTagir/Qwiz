@@ -72,7 +72,7 @@ func GetQwizByID(id int32) (*Qwiz, error) {
 }
 
 func getQuestionByQwizIDIndex(c *gin.Context) {
-	qwizID, err := strconv.Atoi(c.Param("qwiz_id"))
+	qwizID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid qwiz ID"})
 		return
@@ -145,7 +145,7 @@ type PostQuestionData struct {
 }
 
 func createQuestion(c *gin.Context) {
-	qwizID := c.Param("qwiz_id")
+	qwizID := c.Param("id")
 
 	// Convert qwizID to int32 after validating
 	intQwizID, err := strconv.Atoi(qwizID)
@@ -213,7 +213,7 @@ type PatchQuestionData struct {
 
 // updateQuestion handles PATCH requests to update a question.
 func updateQuestion(c *gin.Context) {
-	qwizID := c.Param("qwiz_id")
+	qwizID := c.Param("id")
 	index := c.Param("index")
 
 	var newQuestionData PatchQuestionData
@@ -313,7 +313,7 @@ type DeleteQuestionData struct {
 
 // deleteQuestion handles DELETE requests to delete a question.
 func deleteQuestion(c *gin.Context) {
-	qwizID := c.Param("qwiz_id")
+	qwizID := c.Param("id")
 	index := c.Param("index")
 
 	var deleteQuestionData DeleteQuestionData
@@ -384,6 +384,6 @@ func RegisterRoutes(r *gin.Engine) {
 		questionGroup.GET("/:id/:index", getQuestionByQwizIDIndex)
 		questionGroup.POST("/:id", createQuestion)
 		questionGroup.PATCH("/:id/:index", updateQuestion)
-		questionGroup.DELETE("/:id", deleteQuestion)
+		questionGroup.DELETE("/:id/:index", deleteQuestion)
 	}
 }

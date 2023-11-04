@@ -28,7 +28,7 @@ func GetAccountAssignments(c *gin.Context) {
 		return
 	}
 
-	id := c.Param("id")
+	id := c.Param("accountParam")
 	intID, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})

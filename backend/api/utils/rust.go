@@ -3,6 +3,8 @@ package utils
 import (
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"os"
+	"strings"
 )
 
 // AllTrue checks if all elements in a slice of bools are true.
@@ -47,4 +49,15 @@ func LimitRequestBody(maxSize int64) gin.HandlerFunc {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxSize)
 		c.Next()
 	}
+}
+
+func ExpandTilde(path string) (string, error) {
+	if strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return strings.Replace(path, "~", home, 1), nil
+	}
+	return path, nil
 }

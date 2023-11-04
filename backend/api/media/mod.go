@@ -1,10 +1,12 @@
 package media
 
 import (
+	"api/utils"
 	"encoding/base64"
 	"errors"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,6 +24,7 @@ const (
 )
 
 func (mt Type) GetFileExtension() string {
+	mt = Type(strings.ToLower(string(mt)))
 	switch mt {
 	case Image:
 		return "png"
@@ -31,8 +34,6 @@ func (mt Type) GetFileExtension() string {
 		return "mp3"
 	case Gif:
 		return "gif"
-	case Youtube:
-		return ""
 	default:
 		return ""
 	}
@@ -79,21 +80,36 @@ type NewMediaData struct {
 }
 
 func (nmd *NewMediaData) GetURI() (string, error) {
+	if nmd == nil {
+		log.Printf("NewMediaData is nil")
+		return "", errors.New("newMediaData is nil")
+	}
+	log.Printf("Getting URI via nmd: %s", nmd)
+	log.Printf("nmd.MediaType: %s", nmd.MediaType)
 	if nmd.MediaType == Youtube {
+		log.Printf("Returning YouTube URI: %s", nmd.Data)
 		return nmd.Data, nil
 	}
 
+	log.Printf("Encoding base64 data for non-YouTube media...")
 	decoded, err := base64.StdEncoding.DecodeString(nmd.Data)
-	if err != nil {
-		return "", errors.New(string(Base64Error))
-	}
 
 	fileUUID := uuid.New()
 	filename := filepath.Join(os.Getenv("MEDIA_DIR"), fileUUID.String()+"."+nmd.MediaType.GetFileExtension())
+	log.Printf("File Extension: %s", nmd.MediaType.GetFileExtension())
+	filename, err = utils.ExpandTilde(filename)
+
+	if err != nil {
+		log.Printf("Error decoding base64 data: %v", err)
+		return "", errors.New("error decoding base64 data")
+	}
 
 	if err := os.WriteFile(filename, decoded, 0644); err != nil {
+		log.Printf("Error writing file to disk: %v", err)
 		return "", errors.New(string(IOError))
 	}
+
+	log.Printf("File saved successfully: %s", filename)
 
 	return filename, nil
 }
@@ -181,26 +197,34 @@ func UploadMultiple(datas []*NewMediaData) ([]string, error) {
 }
 
 func FromMediaDatas(mediaDatas []*NewMediaData) ([]*Media, error) {
+	log.Printf("Getting media via nmd: %s", mediaDatas)
 	var uris []string
 	var mediaTypes []Type
 	for _, data := range mediaDatas {
 		uri, err := data.GetURI()
 		if err != nil {
+			log.Printf("Error getting URI: %v", err)
 			return nil, err
 		}
 		uris = append(uris, uri)
 		mediaTypes = append(mediaTypes, data.MediaType)
 	}
 
+	log.Printf("URIs: %v", uris)
+	log.Printf("Media Types: %v", mediaTypes)
+
 	query := `INSERT INTO media (uri, media_type)
-		SELECT * FROM UNNEST($1::VARCHAR[], $2::media_type[])
-		RETURNING uuid, uri, media_type`
+	SELECT * FROM UNNEST($1::VARCHAR[], $2::media_type[])
+	RETURNING uuid, uri, media_type`
 
 	var medias []*Media
-	err := DB.Select(&medias, query, uris, mediaTypes)
+	err := DB.Select(&medias, query, pq.StringArray(uris), pq.Array(mediaTypes))
 	if err != nil {
+		log.Printf("Error executing query: %v", err)
 		return nil, err
 	}
+
+	log.Printf("Media inserted successfully: %v", medias)
 
 	return medias, nil
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"log"
 )
 
@@ -64,15 +65,15 @@ func (e Error) Error() string {
 }
 
 type Question struct {
-	QwizID    int32
-	Index     int32
-	Body      string
-	Answer1   string
-	Answer2   string
-	Answer3   *string
-	Answer4   *string
-	Correct   int16
-	EmbedUUID *uuid.UUID
+	QwizID    int32      `db:"qwiz_id"`
+	Index     int32      `db:"index"`
+	Body      string     `db:"body"`
+	Answer1   string     `db:"answer1"`
+	Answer2   string     `db:"answer2"`
+	Answer3   *string    `db:"answer3"`
+	Answer4   *string    `db:"answer4"`
+	Correct   int16      `db:"correct"`
+	EmbedUUID *uuid.UUID `db:"embed_uuid"`
 }
 
 func FromQuestionData(qwizID int32, data *NewQuestionData) (*Question, error) {
@@ -136,7 +137,11 @@ func FromQuestionDatas(qwizID int32, datas []NewQuestionData) ([]Question, error
 		}
 
 		corrects = append(corrects, d.Correct)
-		medias = append(medias, d.EmbedData)
+		if d.EmbedData != nil {
+			medias = append(medias, d.EmbedData)
+		} else {
+			log.Printf("EmbedData is nil for index %d", len(indexes))
+		}
 	}
 
 	log.Printf("Indexes: %v", indexes)
@@ -150,10 +155,9 @@ func FromQuestionDatas(qwizID int32, datas []NewQuestionData) ([]Question, error
 	log.Printf("Executing query with qwizID: %d and data: %v", qwizID, indexes)
 
 	rows, err := DB.Query(`INSERT INTO question (qwiz_id, index, body, answer1, answer2, answer3, answer4, correct, embed_uuid)
-		SELECT $1, index, body, answer1, answer2, NULLIF(answer3, ''), NULLIF(answer4, ''), correct, NULLIF(embed_uuid, uuid_nil())
-		FROM UNNEST($2, $3, $4, $5, $6, $7, $8, $9)
-		AS t(index, body, answer1, answer2, answer3, answer4, correct, embed_uuid)
-		RETURNING *`, qwizID, indexes, bodies, answers1, answers2, answers3, answers4, corrects, embedUUIDs)
+	SELECT $1, * FROM UNNEST($2::INT[], $3::TEXT[], $4::TEXT[], $5::TEXT[], $6::TEXT[], $7::TEXT[], $8::INT2[], $9::UUID[])
+	AS t(index, body, answer1, answer2, answer3, answer4, correct, embed_uuid)
+	RETURNING *`, qwizID, pq.Array(indexes), pq.StringArray(bodies), pq.StringArray(answers1), pq.StringArray(answers2), pq.StringArray(answers3), pq.StringArray(answers4), pq.Array(corrects), pq.Array(embedUUIDs))
 	if err != nil {
 		log.Printf("Query error: %v", err)
 		return nil, err
@@ -192,18 +196,18 @@ func (q *Question) UpdateIndex(newIndex int32) (bool, error) {
 		return false, nil
 
 	case newIndex > q.Index:
-		_, err := DB.Exec("DELETE FROM question WHERE qwiz_id=? AND index=?", q.QwizID, q.Index)
+		_, err := DB.Exec("DELETE FROM question WHERE qwiz_id=$1 AND index=$2", q.QwizID, q.Index)
 		if err != nil {
 			return false, err
 		}
 
-		_, err = DB.Exec("UPDATE question SET index=index-1 WHERE index>? AND index<=? AND qwiz_id=?", q.Index, newIndex, q.QwizID)
+		_, err = DB.Exec("UPDATE question SET index=index-1 WHERE index>$1 AND qwiz_id=$2", q.Index, q.QwizID)
 		if err != nil {
 			return false, err
 		}
 
 		err = DB.Get(&q.Index, `INSERT INTO question (qwiz_id, index, body, answer1, answer2, answer3, answer4, correct, embed_uuid)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING index`,
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING index`,
 			q.QwizID, newIndex, q.Body, q.Answer1, q.Answer2, q.Answer3, q.Answer4, q.Correct, q.EmbedUUID)
 		if err != nil {
 			return false, err
@@ -212,18 +216,18 @@ func (q *Question) UpdateIndex(newIndex int32) (bool, error) {
 		return true, nil
 
 	case newIndex < q.Index:
-		_, err := DB.Exec("DELETE FROM question WHERE qwiz_id=? AND index=?", q.QwizID, q.Index)
+		_, err := DB.Exec("DELETE FROM question WHERE qwiz_id=$1 AND index=$2", q.QwizID, q.Index)
 		if err != nil {
 			return false, err
 		}
 
-		_, err = DB.Exec("UPDATE question SET index=index+1 WHERE index>=? AND index<? AND qwiz_id=?", newIndex, q.Index, q.QwizID)
+		_, err = DB.Exec("UPDATE question SET index=index+1 WHERE index>=$1 AND index<$2 AND qwiz_id=$3", newIndex, q.Index, q.QwizID)
 		if err != nil {
 			return false, err
 		}
 
 		err = DB.Get(&q.Index, `INSERT INTO question (qwiz_id, index, body, answer1, answer2, answer3, answer4, embed_uuid, correct)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING index`,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING index`,
 			q.QwizID, newIndex, q.Body, q.Answer1, q.Answer2, q.Answer3, q.Answer4, q.EmbedUUID, q.Correct)
 		if err != nil {
 			return false, err
@@ -236,8 +240,7 @@ func (q *Question) UpdateIndex(newIndex int32) (bool, error) {
 }
 
 func (q *Question) UpdateBody(newBody string) error {
-
-	err := DB.Get(&q.Body, "UPDATE question SET body=? WHERE qwiz_id=? AND index=? RETURNING body",
+	err := DB.Get(&q.Body, "UPDATE question SET body=$1 WHERE qwiz_id=$2 AND index=$3 RETURNING body",
 		newBody, q.QwizID, q.Index)
 
 	return err
@@ -249,28 +252,26 @@ func (q *Question) UpdateAnswer(answerNumber uint8, newAnswer *string) (bool, er
 		if newAnswer == nil {
 			return false, nil
 		}
-		return true, DB.Get(&q.Answer1, "UPDATE question SET answer1=? WHERE qwiz_id=? AND index=? RETURNING answer1",
+		return true, DB.Get(&q.Answer1, "UPDATE question SET answer1=$1 WHERE qwiz_id=$2 AND index=$3 RETURNING answer1",
 			*newAnswer, q.QwizID, q.Index)
 
 	case 2:
 		if newAnswer == nil {
 			return false, nil
 		}
-		return true, DB.Get(&q.Answer2, "UPDATE question SET answer2=? WHERE qwiz_id=? AND index=? RETURNING answer2",
-			*newAnswer, q.QwizID, q.Index)
-
+		return true, DB.Get(&q.Answer2, "UPDATE question SET answer2=$1 WHERE qwiz_id=$2 AND index=$3 RETURNING answer2",
+			newAnswer, q.QwizID, q.Index)
 	case 3:
 		if newAnswer == nil {
 			newAnswer = new(string) // Go's sqlx doesn't handle nil pointers well for nullable database fields
 		}
-		return true, DB.Get(&q.Answer3, "UPDATE question SET answer3=? WHERE qwiz_id=? AND index=? RETURNING answer3",
+		return true, DB.Get(&q.Answer3, "UPDATE question SET answer3=$1 WHERE qwiz_id=$2 AND index=$3 RETURNING answer3",
 			*newAnswer, q.QwizID, q.Index)
-
 	case 4:
 		if newAnswer == nil {
 			newAnswer = new(string) // Go's sqlx doesn't handle nil pointers well for nullable database fields
 		}
-		return true, DB.Get(&q.Answer4, "UPDATE question SET answer4=? WHERE qwiz_id=? AND index=? RETURNING answer4",
+		return true, DB.Get(&q.Answer4, "UPDATE question SET answer4=$1 WHERE qwiz_id=$2 AND index=$3 RETURNING answer4",
 			*newAnswer, q.QwizID, q.Index)
 
 	default:
@@ -279,7 +280,7 @@ func (q *Question) UpdateAnswer(answerNumber uint8, newAnswer *string) (bool, er
 }
 
 func (q *Question) UpdateCorrect(newCorrect int16) error {
-	err := DB.Get(&q.Correct, "UPDATE question SET correct=? WHERE qwiz_id=? AND index=? RETURNING correct",
+	err := DB.Get(&q.Correct, "UPDATE question SET correct=$1 WHERE qwiz_id=$2 AND index=$3 RETURNING correct",
 		newCorrect, q.QwizID, q.Index)
 
 	return err
@@ -300,7 +301,7 @@ func (q *Question) UpdateEmbed(newData *media.NewMediaData) error {
 			return err
 		}
 
-		_, err = DB.Exec("UPDATE question SET embed_uuid=? WHERE qwiz_id=? AND index=?",
+		_, err = DB.Exec("UPDATE question SET embed_uuid=$1 WHERE qwiz_id=$2 AND index=$3",
 			med.UUID, q.QwizID, q.Index)
 
 		if err != nil {

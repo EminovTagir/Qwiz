@@ -282,7 +282,7 @@ func TestValidProfilePicturePatch(t *testing.T) {
 
 	// Выполнение запроса PATCH
 	w := httptest.NewRecorder()
-	req, err := http.NewRequest("PATCH", "/api/account/5", bytes.NewBuffer(data))
+	req, err := http.NewRequest("PATCH", "/api/account/13", bytes.NewBuffer(data))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}

@@ -73,9 +73,18 @@ func setupRouter() *gin.Engine {
 	qwiz.DB = db
 
 	gin.SetMode(gin.TestMode)
+
+	// Создаем экземпляр gin без предустановленных миддлваров
 	r := gin.New()
+	// Добавляем миддлвары логирования и восстановления вручную
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+
+	// Продолжаем с настройкой остальных миддлваров и маршрутов
 	r.Use(utils.LimitRequestBody(byteLimit))
 	r.Use(utils.ErrorHandlingMiddleware())
+
+	// Маршруты
 	assignment.RegisterRoutes(r) // маршруты для ассигнаций
 	class.RegisterRoutes(r)      // маршруты для классов
 	vote.RegisterRoutes(r)       // маршруты для голосования
